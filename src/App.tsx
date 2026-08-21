@@ -1,10 +1,11 @@
+import { useMemo, useState } from "react"
 import { TASKS } from "@/data/tasks"
 import { useTodo } from "@/hooks/use-todo"
 import { TaskCard } from "@/components/TaskCard"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { RotateCcw, Gem } from "lucide-react"
+import { Gem, RotateCcw } from "lucide-react"
 
 function todayCN() {
   const d = new Date()
@@ -12,12 +13,29 @@ function todayCN() {
 }
 
 export default function App() {
-  const { state, toggle, reset, doneCount } = useTodo()
-  const total = TASKS.length
-  const pct = total ? Math.round((doneCount / total) * 100) : 0
+  const { state, toggle, toggleSkip, reset, stats } = useTodo()
+  const [showSkipped, setShowSkipped] = useState(true)
 
-  const daily = TASKS.filter((t) => t.frequency === "daily")
-  const weekly = TASKS.filter((t) => t.frequency === "weekly")
+  const daily = useMemo(() => TASKS.filter((t) => t.frequency === "daily"), [])
+  const weekly = useMemo(() => TASKS.filter((t) => t.frequency === "weekly"), [])
+
+  // 参与数 = 总任务 - 跳过数（进度只统计要做的）
+  const participating = TASKS.length - stats.skipped
+  const pct = participating ? Math.round((stats.done / participating) * 100) : 0
+
+  const renderTask = (task: (typeof TASKS)[number], frequency: "daily" | "weekly") => {
+    const status = state[frequency][task.id]
+    if (!showSkipped && status === "skip") return null
+    return (
+      <TaskCard
+        key={task.id}
+        task={task}
+        status={status}
+        onToggle={(id) => toggle(frequency, id)}
+        onToggleSkip={(id) => toggleSkip(frequency, id)}
+      />
+    )
+  }
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-4 py-6">
@@ -30,54 +48,50 @@ export default function App() {
         <Card className="w-full max-w-md p-4">
           <CardContent className="flex flex-col gap-2 p-0">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">今日完成</span>
+              <span className="text-muted-foreground">已完成 / 参与</span>
               <span className="font-semibold">
-                {doneCount} / {total}
+                {stats.done} / {participating}
               </span>
             </div>
             <Progress value={pct} />
-            <p className="text-right text-xs text-muted-foreground">{pct}%</p>
+            <p className="text-right text-xs text-muted-foreground">
+              {pct}% {stats.skipped > 0 && `· ${stats.skipped} 项设为不参与`}
+            </p>
           </CardContent>
         </Card>
       </header>
 
       <main className="flex flex-col gap-8">
         <section>
-          <CardHeader className="px-0 pt-0">
+          <CardHeader className="flex items-center justify-between px-0 pt-0">
             <CardTitle className="border-l-4 border-primary pl-3">每日任务</CardTitle>
           </CardHeader>
           <div className="flex flex-col gap-3">
-            {daily.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                done={!!state.daily[task.id]}
-                onToggle={(id) => toggle("daily", id)}
-              />
-            ))}
+            {daily.map((task) => renderTask(task, "daily"))}
           </div>
         </section>
 
         <section>
-          <CardHeader className="px-0 pt-0">
+          <CardHeader className="flex items-center justify-between px-0 pt-0">
             <CardTitle className="border-l-4 border-primary pl-3">周常任务</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              onClick={() => setShowSkipped((v) => !v)}
+            >
+              {showSkipped ? "隐藏不参与" : "显示不参与"}
+            </Button>
           </CardHeader>
           <div className="flex flex-col gap-3">
-            {weekly.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                done={!!state.weekly[task.id]}
-                onToggle={(id) => toggle("weekly", id)}
-              />
-            ))}
+            {weekly.map((task) => renderTask(task, "weekly"))}
           </div>
         </section>
       </main>
 
       <footer className="mt-10 flex flex-col items-center gap-3 border-t pt-6 text-center">
         <p className="text-xs text-muted-foreground">
-          数据仅保存在本浏览器。每日 0 点自动重置，清除浏览器数据会丢失。
+          数据仅保存在本浏览器。每日 0 点自动重置。任务标注性价比，可设为“不参与”从而不计入进度。
         </p>
         <Button
           variant="outline"
