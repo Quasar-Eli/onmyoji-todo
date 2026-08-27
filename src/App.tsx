@@ -9,6 +9,9 @@ import { RegisterPage } from "@/pages/RegisterPage"
 import { ProfilePage } from "@/pages/ProfilePage"
 import { AdminPage } from "@/pages/AdminPage"
 import { AdminGamePage } from "@/pages/AdminGamePage"
+import { AdminShikigamiPage } from "@/pages/AdminShikigamiPage"
+import { ShikigamiPage } from "@/pages/ShikigamiPage"
+import { ShikigamiDetailPage } from "@/pages/ShikigamiDetailPage"
 
 export default function App() {
   return (
@@ -20,12 +23,15 @@ export default function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/game/:slug" element={<GamePage />} />
+              <Route path="/game/:slug/shikigami" element={<ShikigamiPage />} />
+              <Route path="/game/:slug/shikigami/:id" element={<ShikigamiDetailPage />} />
               <Route path="/article/:id" element={<ArticlePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/admin/game/:gameId" element={<AdminGamePage />} />
+              <Route path="/admin/game/:gameId/shikigami" element={<AdminShikigamiPage />} />
             </Routes>
           </main>
         </div>

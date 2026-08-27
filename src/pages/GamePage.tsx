@@ -15,6 +15,7 @@ export function GamePage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [modules, setModules] = useState<Module[]>([])
   const [articles, setArticles] = useState<Article[]>([])
+  const [shikigamiCount, setShikigamiCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState("")
   const [activeCat, setActiveCat] = useState<string>("all")
@@ -40,14 +41,16 @@ export function GamePage() {
       const gameData = g as Game
       setGame(gameData)
 
-      const [{ data: cats }, { data: mods }, { data: arts }] = await Promise.all([
+      const [{ data: cats }, { data: mods }, { data: arts }, { count: skCount }] = await Promise.all([
         supabase.from("categories").select("*").eq("game_id", gameData.id).order("sort_order"),
         supabase.from("modules").select("*").eq("game_id", gameData.id).order("sort_order"),
         supabase.from("articles").select("*").eq("game_id", gameData.id),
+        supabase.from("shikigami").select("*", { count: "exact", head: true }).eq("game_id", gameData.id),
       ])
       setCategories((cats as Category[]) ?? [])
       setModules((mods as Module[]) ?? [])
       setArticles((arts as Article[]) ?? [])
+      setShikigamiCount(skCount ?? 0)
       setLoading(false)
     })()
   }, [slug])
@@ -104,6 +107,23 @@ export function GamePage() {
           </Button>
         )}
       </div>
+
+      <Link to={`/game/${game.slug}/shikigami`}>
+          <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
+            <CardContent className="flex items-center gap-4 p-4">
+              <span className="text-3xl">⚔️</span>
+              <div className="flex-1">
+                <h2 className="font-semibold">式神图鉴</h2>
+                <p className="text-sm text-muted-foreground">
+                  {shikigamiCount > 0
+                    ? `共 ${shikigamiCount} 位式神 · 点击查阅培养、御魂、面板与就业攻略`
+                    : "收录式神攻略，点击进入"}
+                </p>
+              </div>
+              <span className="text-primary">进入 →</span>
+            </CardContent>
+          </Card>
+        </Link>
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">

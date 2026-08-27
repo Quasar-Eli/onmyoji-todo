@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Settings2, Plus, Trash2, Users, ShieldCheck } from "lucide-react"
+import { Settings2, Plus, Trash2, Users, ShieldCheck, Swords } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface GameAdmin {
@@ -269,6 +269,12 @@ export function AdminPage() {
                   <Link to={`/admin/game/${game.id}`}>
                     <Settings2 className="h-4 w-4" />
                     词条
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`/admin/game/${game.id}/shikigami`}>
+                    <Swords className="h-4 w-4" />
+                    式神
                   </Link>
                 </Button>
                 {isSuper && (

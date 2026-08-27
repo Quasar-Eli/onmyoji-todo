@@ -65,3 +65,24 @@ export interface Comment {
   content: string
   created_at: string
 }
+
+export type Rarity = "SP" | "SSR" | "SR" | "R"
+
+export interface Shikigami {
+  id: string
+  game_id: string
+  name: string
+  rarity: Rarity
+  type: string | null
+  image_url: string | null
+  description: string | null
+  cultivate: string | null
+  yuhun: string | null
+  panel: string | null
+  pve: string | null
+  pvp: string | null
+  sort_order: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
