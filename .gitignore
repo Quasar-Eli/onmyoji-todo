@@ -26,3 +26,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Trae IDE skill configs
+.agents/
+skills-lock.json
