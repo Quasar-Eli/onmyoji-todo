@@ -16,6 +16,10 @@ dist-ssr
 .env
 .env.local
 
+
+# 文档目录
+docs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# 本项目为 HashRouter SPA，爬虫无法直接索引 #/ 内路由，仅放行首页静态资源
+Disallow: /#/admin
+Disallow: /#/profile
+
+Sitemap: https://your-username.github.io/onmyoji-todo-react/sitemap.xml

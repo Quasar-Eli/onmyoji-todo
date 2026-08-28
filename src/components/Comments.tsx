@@ -6,7 +6,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { MessageSquare, Send, Trash2, Reply } from "lucide-react"
+import { validateComment } from "@/lib/sensitive"
+import { cn } from "@/lib/utils"
+import { MessageSquare, Send, ThumbsUp, Trash2, Reply } from "lucide-react"
 
 interface CommentWithUser extends Comment {
   username?: string
@@ -20,6 +22,10 @@ interface CommentsProps {
   canModerate: boolean
 }
 
+type SortMode = "new" | "hot"
+
+const PAGE_SIZE = 20
+
 export function Comments({ articleId, canModerate }: CommentsProps) {
   const { user, profile } = useAuth()
   const [comments, setComments] = useState<CommentWithUser[]>([])
@@ -27,6 +33,10 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
   const [newContent, setNewContent] = useState("")
   const [replyTarget, setReplyTarget] = useState<CommentWithUser | null>(null)
   const [replyContent, setReplyContent] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [sort, setSort] = useState<SortMode>("new")
+  const [visible, setVisible] = useState(PAGE_SIZE)
+  const [likedMap, setLikedMap] = useState<Record<string, boolean>>({})
 
   const load = async () => {
     const { data, error } = await supabase
@@ -76,12 +86,43 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
     setLoading(false)
   }
 
+  // 加载当前用户的评论点赞状态（RLS：仅本人可读）
+  const loadLikedState = async (commentIds: string[]) => {
+    if (!user || commentIds.length === 0) return
+    const { data } = await supabase
+      .from("comment_likes")
+      .select("comment_id")
+      .eq("user_id", user.id)
+      .in("comment_id", commentIds)
+    if (data) {
+      setLikedMap(Object.fromEntries(data.map((l) => [l.comment_id, true])))
+    }
+  }
+
   useEffect(() => {
-    load()
+    setLoading(true)
+    setVisible(PAGE_SIZE)
+    ;(async () => {
+      await load()
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId])
 
+  // 加载完评论后再拉点赞状态
+  useEffect(() => {
+    const ids = flattenComments(comments).map((c) => c.id)
+    void loadLikedState(ids)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comments, user])
+
   const submit = async () => {
-    if (!user || !newContent.trim()) return
+    if (!user) return
+    const err = validateComment(newContent)
+    if (err) {
+      setError(err)
+      return
+    }
+    setError(null)
     const { error } = await supabase.from("comments").insert({
       article_id: articleId,
       user_id: user.id,
@@ -89,12 +130,18 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
     })
     if (!error) {
       setNewContent("")
-      load()
+      await load()
     }
   }
 
   const submitReply = async () => {
-    if (!user || !replyTarget || !replyContent.trim()) return
+    if (!user || !replyTarget) return
+    const err = validateComment(replyContent)
+    if (err) {
+      setError(err)
+      return
+    }
+    setError(null)
     const { error } = await supabase.from("comments").insert({
       article_id: articleId,
       parent_id: replyTarget.id,
@@ -104,14 +151,38 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
     if (!error) {
       setReplyContent("")
       setReplyTarget(null)
-      load()
+      await load()
     }
   }
 
   const remove = async (comment: CommentWithUser) => {
     await supabase.from("comments").delete().eq("id", comment.id)
-    load()
+    await load()
   }
+
+  /** C1：评论点赞切换 */
+  const toggleLike = async (comment: CommentWithUser) => {
+    if (!user) return
+    const { data, error } = await supabase.rpc("toggle_comment_like", {
+      p_comment_id: comment.id,
+    })
+    if (error || !data) return
+    const res = data as { liked: boolean; count: number }
+    setLikedMap((m) => ({ ...m, [comment.id]: res.liked }))
+    // 本地同步点赞数
+    setComments((list) =>
+      list.map((c) =>
+        updateComment(c, comment.id, (target) => ({ ...target, like_count: res.count }))
+      )
+    )
+  }
+
+  const sortedRoots = [...comments].sort((a, b) =>
+    sort === "hot"
+      ? (b.like_count ?? 0) - (a.like_count ?? 0)
+      : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
+  const visibleRoots = sortedRoots.slice(0, visible)
 
   const renderComment = (comment: CommentWithUser, isReply = false) => (
     <div key={comment.id} className={isReply ? "ml-8 mt-3" : ""}>
@@ -120,7 +191,7 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
           <div className="flex items-start gap-3">
             <Avatar className="h-8 w-8">
               {comment.avatar_url ? (
-                <img src={comment.avatar_url} alt="" className="h-full w-full object-cover" />
+                <img src={comment.avatar_url} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
               ) : (
                 <AvatarFallback>{comment.username?.[0]?.toUpperCase() ?? "U"}</AvatarFallback>
               )}
@@ -132,18 +203,36 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
                   {new Date(comment.created_at).toLocaleString()}
                 </span>
               </div>
-              <p className="mt-1 break-words text-sm">{comment.content}</p>
+              <p className="mt-1 wrap-break-word text-sm">{comment.content}</p>
               <div className="mt-2 flex items-center gap-2">
                 {user && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 gap-1 px-2 text-xs"
-                    onClick={() => setReplyTarget(comment)}
-                  >
-                    <Reply className="h-3 w-3" />
-                    回复
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 gap-1 px-2 text-xs"
+                      onClick={() => void toggleLike(comment)}
+                      disabled={!user}
+                      title={user ? undefined : "登录后可点赞"}
+                    >
+                      <ThumbsUp
+                        className={cn(
+                          "h-3 w-3",
+                          likedMap[comment.id] && "fill-current text-primary"
+                        )}
+                      />
+                      {comment.like_count ?? 0}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 gap-1 px-2 text-xs"
+                      onClick={() => setReplyTarget(comment)}
+                    >
+                      <Reply className="h-3 w-3" />
+                      回复
+                    </Button>
+                  </>
                 )}
                 {(profile?.id === comment.user_id || canModerate) && (
                   <ConfirmDialog
@@ -175,6 +264,9 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
       <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
         <MessageSquare className="h-5 w-5 text-primary" />
         评论
+        <span className="text-sm font-normal text-muted-foreground">
+          {comments.length}
+        </span>
       </h2>
 
       {user ? (
@@ -182,7 +274,10 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
           <CardContent className="flex gap-2 p-3">
             <Input
               value={newContent}
-              onChange={(e) => setNewContent(e.target.value)}
+              onChange={(e) => {
+                setNewContent(e.target.value)
+                if (error) setError(null)
+              }}
               placeholder="写下你的评论..."
               onKeyDown={(e) => e.key === "Enter" && submit()}
             />
@@ -191,6 +286,7 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
               发送
             </Button>
           </CardContent>
+          {error && <p className="px-3 pb-3 text-sm text-destructive">{error}</p>}
         </Card>
       ) : (
         <p className="mb-4 text-sm text-muted-foreground">登录后即可发表评论。</p>
@@ -216,13 +312,56 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
         </Card>
       )}
 
+      {comments.length > 0 && (
+        <div className="mb-3 flex items-center gap-2">
+          <Button
+            variant={sort === "new" ? "default" : "outline"}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setSort("new")}
+          >
+            最新
+          </Button>
+          <Button
+            variant={sort === "hot" ? "default" : "outline"}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => setSort("hot")}
+          >
+            最热
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-sm text-muted-foreground">加载评论...</p>
       ) : comments.length === 0 ? (
         <p className="text-sm text-muted-foreground">还没有评论，来抢沙发吧。</p>
       ) : (
-        <div className="flex flex-col gap-3">{comments.map((c) => renderComment(c))}</div>
+        <div className="flex flex-col gap-3">
+          {visibleRoots.map((c) => renderComment(c))}
+          {visible < sortedRoots.length && (
+            <Button variant="outline" className="w-full" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
+              加载更多（剩余 {sortedRoots.length - visible} 条）
+            </Button>
+          )}
+        </div>
       )}
     </div>
   )
+}
+
+/** 扁平化评论树 */
+const flattenComments = (list: CommentWithUser[]): CommentWithUser[] =>
+  list.flatMap((c) => [c, ...flattenComments(c.replies)])
+
+/** 递归更新某条评论（含子树） */
+const updateComment = (
+  node: CommentWithUser,
+  id: string,
+  fn: (c: CommentWithUser) => CommentWithUser
+): CommentWithUser => {
+  if (node.id === id) return fn(node)
+  if (node.replies.length === 0) return node
+  return { ...node, replies: node.replies.map((r) => updateComment(r, id, fn)) }
 }

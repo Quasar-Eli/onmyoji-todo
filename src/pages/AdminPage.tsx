@@ -13,8 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Settings2, Plus, Trash2, Users, ShieldCheck, Swords } from "lucide-react"
+import { Settings2, Plus, Trash2, Users, ShieldCheck, ShieldAlert, Swords, BookOpen, MessageSquare, TrendingUp, Megaphone, ScrollText } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { useDocumentTitle } from "@/lib/seo"
 
 interface GameAdmin {
   game_id: string
@@ -25,10 +26,16 @@ interface GameAdmin {
 export function AdminPage() {
   const isSuper = useIsSuperAdmin()
   const { profile } = useAuth()
+
+  useDocumentTitle("管理后台")
   const [games, setGames] = useState<Game[]>([])
   const [admins, setAdmins] = useState<GameAdmin[]>([])
   const [users, setUsers] = useState<{ id: string; username: string; role: string }[]>([])
   const [loading, setLoading] = useState(true)
+
+  // H1：仪表盘统计
+  const [stats, setStats] = useState({ articles: 0, shikigami: 0, comments: 0, users: 0 })
+  const [daily, setDaily] = useState<{ label: string; count: number }[]>([])
 
   // 表单
   const [name, setName] = useState("")
@@ -40,14 +47,43 @@ export function AdminPage() {
   const [assignUserId, setAssignUserId] = useState("")
 
   const load = async () => {
-    const [{ data: g }, { data: ga }, { data: u }] = await Promise.all([
+    // 近 7 天（含今天）用于条形图
+    const days = [...Array(7)].map((_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() - (6 - i))
+      d.setHours(0, 0, 0, 0)
+      return d
+    })
+    const [{ data: g }, { data: ga }, { data: u }, aCount, sCount, cCount, recent] = await Promise.all([
       supabase.from("games").select("*").order("created_at"),
       supabase.from("game_admins").select("*"),
       supabase.from("profiles").select("id, username, role").order("username"),
+      supabase.from("articles").select("*", { count: "exact", head: true }),
+      supabase.from("shikigami").select("*", { count: "exact", head: true }),
+      supabase.from("comments").select("*", { count: "exact", head: true }),
+      supabase.from("articles").select("created_at").gte("created_at", days[0].toISOString()),
     ])
     setGames((g as Game[]) ?? [])
     setAdmins((ga as GameAdmin[]) ?? [])
     setUsers((u as { id: string; username: string; role: string }[]) ?? [])
+    setStats({
+      articles: aCount.count ?? 0,
+      shikigami: sCount.count ?? 0,
+      comments: cCount.count ?? 0,
+      users: (u?.length ?? 0),
+    })
+    // 按日期聚合
+    const counts = new Map<string, number>()
+    for (const r of (recent?.data ?? []) as { created_at: string }[]) {
+      const key = r.created_at.slice(0, 10)
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    setDaily(
+      days.map((d) => {
+        const key = d.toISOString().slice(0, 10)
+        return { label: `${d.getMonth() + 1}/${d.getDate()}`, count: counts.get(key) ?? 0 }
+      })
+    )
     setLoading(false)
   }
 
@@ -112,7 +148,70 @@ export function AdminPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8">
-      <h1 className="mb-6 text-2xl font-bold">管理后台</h1>
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold">管理后台</h1>
+        {isSuper && (
+          <div className="flex gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to="/admin/sensitive-words">
+                <ShieldAlert className="h-4 w-4" />
+                敏感词
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/admin/announcements">
+                <Megaphone className="h-4 w-4" />
+                公告
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/admin/data">
+                <ScrollText className="h-4 w-4" />
+                数据
+              </Link>
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* H1：数据仪表盘 */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "攻略词条", value: stats.articles, icon: BookOpen },
+          { label: "式神图鉴", value: stats.shikigami, icon: Swords },
+          { label: "累计评论", value: stats.comments, icon: MessageSquare },
+          { label: "注册用户", value: stats.users, icon: Users },
+        ].map(({ label, value, icon: Icon }) => (
+          <Card key={label} className="p-4 text-center">
+            <Icon className="mx-auto mb-1 h-5 w-5 text-primary" />
+            <p className="text-2xl font-bold">{value.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="mb-6 p-5">
+        <h2 className="mb-4 flex items-center gap-2 font-semibold">
+          <TrendingUp className="h-4 w-4 text-primary" />
+          近 7 日新增词条
+        </h2>
+        <div className="flex h-32 items-end gap-2">
+          {daily.map((d) => (
+            <div key={d.label} className="flex flex-1 flex-col items-center gap-1">
+              <div className="flex w-full flex-1 items-end">
+                <div
+                  className="w-full rounded-t bg-primary/70 transition-all"
+                  style={{
+                    height: d.count === 0 ? "2px" : `${Math.min(100, Math.max(8, (d.count / Math.max(1, ...daily.map((x) => x.count))) * 100))}%`,
+                  }}
+                  title={`${d.label}：${d.count} 篇`}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground">{d.label}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {isSuper && (
         <>
@@ -275,6 +374,12 @@ export function AdminPage() {
                   <Link to={`/admin/game/${game.id}/shikigami`}>
                     <Swords className="h-4 w-4" />
                     式神
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to={`/admin/game/${game.id}/items`}>
+                    <BookOpen className="h-4 w-4" />
+                    装备
                   </Link>
                 </Button>
                 {isSuper && (

@@ -8,6 +8,7 @@ interface AuthState {
   login: (username: string, password: string) => Promise<{ error: string | null }>
   register: (username: string, password: string) => Promise<{ error: string | null }>
   logout: () => Promise<void>
+  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -69,6 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
   }, [])
 
+  /** 重新拉取当前用户资料（改昵称/头像后全站同步） */
+  const refreshProfile = useCallback(async () => {
+    if (!user) return
+    await fetchProfile(user.id)
+  }, [user, fetchProfile])
+
   const value: AuthState = {
     user,
     profile,
@@ -76,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     register,
     logout,
+    refreshProfile,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

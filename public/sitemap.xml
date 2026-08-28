@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  注意：本项目为 HashRouter 的 SPA，页面路由形如 /#/game/onmyoji，
+  常规搜索引擎无法索引 hash 片段。此 sitemap 仅作占位/基础声明，
+  部署后请将域名替换为你的实际 GitHub Pages 地址。
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://your-username.github.io/onmyoji-todo-react/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

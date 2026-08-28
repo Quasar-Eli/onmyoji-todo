@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Gamepad2 } from "lucide-react"
+import { useDocumentTitle } from "@/lib/seo"
 
 export function LoginPage() {
+  useDocumentTitle("登录", "登录游戏Wiki账号")
   const { login } = useAuth()
   const navigate = useNavigate()
   const [username, setUsername] = useState("")

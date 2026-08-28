@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -14,8 +13,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { useDocumentTitle } from "@/lib/seo"
 import { ConfirmDialog, PromptDialog } from "@/components/ui/confirm-dialog"
+import { MarkdownEditor } from "@/components/MarkdownEditor"
 import {
   ArrowLeft,
   FileText,
@@ -43,6 +51,11 @@ export function AdminGamePage() {
   const [title, setTitle] = useState("")
   const [moduleId, setModuleId] = useState<string>("")
   const [content, setContent] = useState("")
+  const [tags, setTags] = useState("")
+  const [version, setVersion] = useState("")
+  const [status, setStatus] = useState<"draft" | "pending" | "published">("published")
+
+  useDocumentTitle(game ? `${game.name} · 内容管理` : "内容管理")
 
   const canManage =
     profile?.role === "super_admin" ||
@@ -102,6 +115,9 @@ export function AdminGamePage() {
     setTitle(module.name)
     setModuleId(module.id)
     setContent("")
+    setTags("")
+    setVersion("")
+    setStatus("published")
     setActiveModule(module)
     setActiveCat(module.category_id)
     setEditOpen(true)
@@ -112,6 +128,9 @@ export function AdminGamePage() {
     setTitle(article.title)
     setModuleId(article.module_id ?? "")
     setContent(article.content)
+    setTags((article.tags ?? []).join(", "))
+    setVersion(article.version ?? "")
+    setStatus((article.status as "draft" | "pending" | "published") ?? "published")
     setActiveModule(modules.find((m) => m.id === article.module_id) ?? null)
     setEditOpen(true)
   }
@@ -119,23 +138,29 @@ export function AdminGamePage() {
   const save = async () => {
     if (!title.trim() || !moduleId) return
     const module = modules.find((m) => m.id === moduleId)
+    // B2：逗号分隔转数组
+    const tagList = tags
+      .split(/[,，]/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+    const payload = {
+      title,
+      category_id: module?.category_id ?? null,
+      module_id: moduleId,
+      content,
+      tags: tagList,
+      version: version.trim() || null,
+      status,
+    }
     if (editing) {
       await supabase
         .from("articles")
-        .update({
-          title,
-          category_id: module?.category_id ?? null,
-          module_id: moduleId,
-          content,
-        })
+        .update(payload)
         .eq("id", editing.id)
     } else {
       await supabase.from("articles").insert({
+        ...payload,
         game_id: gameId,
-        category_id: module?.category_id ?? null,
-        module_id: moduleId,
-        title,
-        content,
         created_by: profile?.id ?? null,
       })
     }
@@ -258,7 +283,18 @@ export function AdminGamePage() {
                                 <div className="min-w-0">
                                   <p className="truncate text-sm font-medium">{m.name}</p>
                                   <p className="text-xs text-muted-foreground">
-                                    {article ? "已有内容" : "暂无内容"}
+                                    {article ? (
+                                      <span className="flex items-center gap-1.5">
+                                        {article.status === "pending" && (
+                                          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
+                                            待审核
+                                          </span>
+                                        )}
+                                        已有内容
+                                      </span>
+                                    ) : (
+                                      "暂无内容"
+                                    )}
                                   </p>
                                 </div>
                               </div>
@@ -377,12 +413,37 @@ export function AdminGamePage() {
               <Label>标题</Label>
               <Input value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>标签（逗号分隔）</Label>
+                <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="如：新手向" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>适用版本</Label>
+                <Input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="如：2026.08" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>状态（H4 审核）</Label>
+                <Select value={status} onValueChange={(v) => setStatus((v ?? "published") as "draft" | "pending" | "published")}>
+                  <SelectTrigger>
+                    <SelectValue getLabel={(v) =>
+                      v === "pending" ? "待审核" : v === "draft" ? "草稿" : "已发布"
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="published">已发布</SelectItem>
+                    <SelectItem value="pending">待审核</SelectItem>
+                    <SelectItem value="draft">草稿</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="flex flex-col gap-1.5">
               <Label>内容（Markdown）</Label>
-              <Textarea
+              <MarkdownEditor
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={16}
+                onChange={setContent}
+                rows={14}
                 placeholder={"## 标题\n\n支持 **Markdown** 语法，如 `# 一级标题`、`- 列表`、`| 表格 |`"}
               />
             </div>

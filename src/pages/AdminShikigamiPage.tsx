@@ -25,6 +25,7 @@ import { Badge } from "@/components/ui/badge"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { cn } from "@/lib/utils"
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react"
+import { useDocumentTitle } from "@/lib/seo"
 
 const RARITIES: Rarity[] = ["SP", "SSR", "SR", "R"]
 
@@ -41,6 +42,10 @@ const emptyForm = {
   type: "",
   image_url: "",
   description: "",
+  attribute: "",
+  cv: "",
+  version: "",
+  biography: "",
   cultivate: "",
   yuhun: "",
   panel: "",
@@ -52,6 +57,8 @@ export function AdminShikigamiPage() {
   const { gameId } = useParams<{ gameId: string }>()
   const { profile } = useAuth()
   const [game, setGame] = useState<Game | null>(null)
+
+  useDocumentTitle(game ? `${game.name} · 式神管理` : "式神管理")
   const [list, setList] = useState<Shikigami[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -76,7 +83,8 @@ export function AdminShikigamiPage() {
   }
 
   useEffect(() => {
-    load()
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId])
 
   const set = (k: keyof typeof emptyForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -96,6 +104,10 @@ export function AdminShikigamiPage() {
       type: s.type ?? "",
       image_url: s.image_url ?? "",
       description: s.description ?? "",
+      attribute: s.attribute ?? "",
+      cv: s.cv ?? "",
+      version: s.version ?? "",
+      biography: s.biography ?? "",
       cultivate: s.cultivate ?? "",
       yuhun: s.yuhun ?? "",
       panel: s.panel ?? "",
@@ -114,6 +126,10 @@ export function AdminShikigamiPage() {
       type: form.type.trim() || null,
       image_url: form.image_url.trim() || null,
       description: form.description.trim() || null,
+      attribute: form.attribute.trim() || null,
+      cv: form.cv.trim() || null,
+      version: form.version.trim() || null,
+      biography: form.biography.trim() || null,
       cultivate: form.cultivate.trim() || null,
       yuhun: form.yuhun.trim() || null,
       panel: form.panel.trim() || null,
@@ -126,12 +142,12 @@ export function AdminShikigamiPage() {
       await supabase.from("shikigami").insert({ ...payload, created_by: profile?.id ?? null })
     }
     setOpen(false)
-    load()
+    void load()
   }
 
   const remove = async (id: string) => {
     await supabase.from("shikigami").delete().eq("id", id)
-    load()
+    void load()
   }
 
   if (loading) return <p className="py-16 text-center text-muted-foreground">加载中...</p>
@@ -177,7 +193,7 @@ export function AdminShikigamiPage() {
                   <Badge className={cn("px-2 py-0.5 text-xs font-bold tracking-wider", rarityBadge[s.rarity])}>{s.rarity}</Badge>
                 </div>
                 {s.image_url && (
-                  <img src={s.image_url} alt={s.name} className="mb-2 h-20 w-full rounded object-cover" referrerPolicy="no-referrer" />
+                  <img src={s.image_url} alt={s.name} className="mb-2 h-20 w-full rounded object-cover" referrerPolicy="no-referrer" loading="lazy" />
                 )}
                 <p className="mb-2 line-clamp-1 text-xs text-muted-foreground">{s.type ?? "未知类型"}</p>
                 <div className="flex gap-1.5">
@@ -237,6 +253,25 @@ export function AdminShikigamiPage() {
             <div className="flex flex-col gap-1.5">
               <Label>简介</Label>
               <Textarea value={form.description} onChange={set("description")} rows={2} placeholder="一句话介绍" />
+            </div>
+            {/* B3：扩展字段 */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label>属性</Label>
+                <Input value={form.attribute} onChange={set("attribute")} placeholder="如：火" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>声优</Label>
+                <Input value={form.cv} onChange={set("cv")} placeholder="声优名" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>适用版本</Label>
+                <Input value={form.version} onChange={set("version")} placeholder="如：2026.08" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>传记</Label>
+              <Textarea value={form.biography} onChange={set("biography")} rows={2} placeholder="背景故事简介" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>培养方式</Label>

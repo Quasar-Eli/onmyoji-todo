@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { FolderOpen, LayoutGrid, Plus, Search } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { cn } from "@/lib/utils"
+import { useDocumentTitle } from "@/lib/seo"
 
 export function GamePage() {
   const { slug } = useParams<{ slug: string }>()
@@ -19,6 +20,8 @@ export function GamePage() {
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState("")
   const [activeCat, setActiveCat] = useState<string>("all")
+
+  useDocumentTitle(game?.name, game?.description ?? undefined)
 
   const canEdit =
     profile?.role === "super_admin" ||
@@ -124,6 +127,58 @@ export function GamePage() {
             </CardContent>
           </Card>
         </Link>
+
+      <Link to={`/game/${game.slug}/items`}>
+        <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
+          <CardContent className="flex items-center gap-4 p-4">
+            <span className="text-3xl">🛡️</span>
+            <div className="flex-1">
+              <h2 className="font-semibold">装备图鉴</h2>
+              <p className="text-sm text-muted-foreground">收录装备、御魂与道具数据，点击进入</p>
+            </div>
+            <span className="text-primary">进入 →</span>
+          </CardContent>
+        </Card>
+      </Link>
+
+      <Link to={`/game/${game.slug}/gacha`}>
+        <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
+          <CardContent className="flex items-center gap-4 p-4">
+            <span className="text-3xl">🎴</span>
+            <div className="flex-1">
+              <h2 className="font-semibold">抽卡模拟器</h2>
+              <p className="text-sm text-muted-foreground">单抽/十连模拟，统计你的欧气</p>
+            </div>
+            <span className="text-primary">进入 →</span>
+          </CardContent>
+        </Card>
+      </Link>
+
+      <Link to={`/game/${game.slug}/topics`}>
+        <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
+          <CardContent className="flex items-center gap-4 p-4">
+            <span className="text-3xl">💬</span>
+            <div className="flex-1">
+              <h2 className="font-semibold">问答</h2>
+              <p className="text-sm text-muted-foreground">向玩家提问，或解答大家的疑惑</p>
+            </div>
+            <span className="text-primary">进入 →</span>
+          </CardContent>
+        </Card>
+      </Link>
+
+      <Link to={`/game/${game.slug}/submit`}>
+        <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
+          <CardContent className="flex items-center gap-4 p-4">
+            <span className="text-3xl">📝</span>
+            <div className="flex-1">
+              <h2 className="font-semibold">投稿</h2>
+              <p className="text-sm text-muted-foreground">贡献你的攻略，审核通过后发布</p>
+            </div>
+            <span className="text-primary">进入 →</span>
+          </CardContent>
+        </Card>
+      </Link>
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">

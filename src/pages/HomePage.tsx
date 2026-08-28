@@ -1,30 +1,157 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { supabase, type Game } from "@/lib/supabase"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Gamepad2, Search } from "lucide-react"
+import { useDocumentTitle } from "@/lib/seo"
+import {
+  BookOpen,
+  Eye,
+  Gamepad2,
+  Megaphone,
+  MessageSquare,
+  Search,
+  Swords,
+  Tag,
+  Users,
+} from "lucide-react"
+
+interface StatItem {
+  label: string
+  value: number
+  icon: typeof Users
+}
+
+interface HotArticle {
+  id: string
+  title: string
+  game_id: string
+  game_name?: string
+  game_slug?: string
+  view_count?: number
+  updated_at: string
+}
+
+interface Announcement {
+  id: string
+  title: string
+  content: string
+  pinned: boolean
+  published_at: string
+}
 
 export function HomePage() {
   const [games, setGames] = useState<Game[]>([])
+  const [stats, setStats] = useState<{ games: number; articles: number; shikigami: number; comments: number }>({
+    games: 0,
+    articles: 0,
+    shikigami: 0,
+    comments: 0,
+  })
+  const [latest, setLatest] = useState<HotArticle[]>([])
+  const [hot, setHot] = useState<HotArticle[]>([])
+  const [hotTags, setHotTags] = useState<{ tag: string; count: number }[]>([])
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState("")
 
+  useDocumentTitle("多游戏 Wiki 中心", "浏览各游戏的攻略、图鉴与词条")
+
   useEffect(() => {
-    supabase
-      .from("games")
-      .select("*")
-      .order("created_at", { ascending: true })
-      .then(({ data, error }) => {
-        if (!error && data) setGames(data as Game[])
-        setLoading(false)
+    ;(async () => {
+      const [gRes, aRes, sRes, cRes] = await Promise.all([
+        supabase.from("games").select("*").order("created_at"),
+        supabase.from("articles").select("*", { count: "exact", head: true }),
+        supabase.from("shikigami").select("*", { count: "exact", head: true }),
+        supabase.from("comments").select("*", { count: "exact", head: true }),
+      ])
+      setGames((gRes.data as Game[]) ?? [])
+      setStats({
+        games: gRes.data?.length ?? 0,
+        articles: aRes.count ?? 0,
+        shikigami: sRes.count ?? 0,
+        comments: cRes.count ?? 0,
       })
+
+      // 最新更新 / 热门词条（前 6 条）
+      const [latRes, hotRes, tagRes, annRes] = await Promise.all([
+        supabase.from("articles").select("id, title, game_id, updated_at").order("updated_at", { ascending: false }).limit(6),
+        supabase.from("articles").select("id, title, game_id, view_count").gte("created_at", new Date(Date.now() - 7 * 864e5).toISOString()).order("view_count", { ascending: false }).limit(6),
+        supabase.from("articles").select("tags").limit(1000),
+        supabase.from("announcements").select("*").order("pinned", { ascending: false }).order("published_at", { ascending: false }).limit(3),
+      ])
+      const gameMap = new Map((gRes.data as Game[] | null)?.map((g) => [g.id, g]) ?? [])
+      const withGame = (rows: { id: string; title: string; game_id: string; view_count?: number; updated_at?: string }[]): HotArticle[] =>
+        rows.map((r) => {
+          const g = gameMap.get(r.game_id)
+          return {
+            id: r.id,
+            title: r.title,
+            game_id: r.game_id,
+            game_name: g?.name,
+            game_slug: g?.slug,
+            view_count: r.view_count,
+            updated_at: r.updated_at ?? "",
+          }
+        })
+      setLatest(withGame((latRes.data as never[] ?? []) as { id: string; title: string; game_id: string; updated_at?: string }[]))
+      setHot(withGame((hotRes.data as never[] ?? []) as { id: string; title: string; game_id: string; view_count?: number }[]))
+      setAnnouncements((annRes.data as Announcement[] | null) ?? [])
+
+      // 热门标签：聚合最近文章的 tags 计数
+      const counts = new Map<string, number>()
+      for (const row of (tagRes.data ?? []) as { tags?: string[] }[]) {
+        for (const t of row.tags ?? []) {
+          counts.set(t, (counts.get(t) ?? 0) + 1)
+        }
+      }
+      setHotTags(
+        [...counts.entries()]
+          .map(([tag, count]) => ({ tag, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 12)
+      )
+      setLoading(false)
+    })()
   }, [])
 
-  const filtered = games.filter((g) => g.name.toLowerCase().includes(query.toLowerCase()))
+  const filtered = useMemo(
+    () => games.filter((g) => g.name.toLowerCase().includes(query.toLowerCase())),
+    [games, query]
+  )
+
+  const statItems: StatItem[] = [
+    { label: "游戏栏目", value: stats.games, icon: Gamepad2 },
+    { label: "攻略词条", value: stats.articles, icon: BookOpen },
+    { label: "式神图鉴", value: stats.shikigami, icon: Swords },
+    { label: "累计评论", value: stats.comments, icon: MessageSquare },
+  ]
+
+  if (loading) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-4 py-8">
+        <Skeleton className="mx-auto mb-6 h-12 w-2/3" />
+        <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
+          ))}
+        </div>
+        <div className="mb-6 grid gap-4 lg:grid-cols-2">
+          <Skeleton className="h-64 rounded-xl" />
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-36 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-8">
+    <div className="mx-auto w-full max-w-5xl px-4 py-8">
+      {/* Hero */}
       <div className="mb-8 text-center">
         <div className="mb-3 flex items-center justify-center gap-2 text-5xl">
           <Gamepad2 className="h-12 w-12 text-primary" />
@@ -35,7 +162,126 @@ export function HomePage() {
         </p>
       </div>
 
-      <div className="relative mb-8 mx-auto w-full max-w-md">
+      {/* G2：站点公告 */}
+      {announcements.length > 0 && (
+        <div className="mb-8 flex flex-col gap-2">
+          {announcements.map((a) => (
+            <Card key={a.id} className={a.pinned ? "border-primary/40" : ""}>
+              <div className="flex items-start gap-3 p-4">
+                <Megaphone className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold">{a.title}</span>
+                    {a.pinned && (
+                      <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary">置顶</span>
+                    )}
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(a.published_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">
+                    {a.content}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* A1：数据统计 */}
+      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {statItems.map(({ label, value, icon: Icon }) => (
+          <Card key={label} className="p-4 text-center">
+            <Icon className="mx-auto mb-1 h-5 w-5 text-primary" />
+            <p className="text-2xl font-bold">{value.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
+          </Card>
+        ))}
+      </div>
+
+      {/* A1：最新更新 / 热门词条 */}
+      <div className="mb-8 grid gap-4 lg:grid-cols-2">
+        <Card className="p-5">
+          <h2 className="mb-3 flex items-center gap-2 font-semibold">
+            <Users className="h-4 w-4 text-primary" />
+            最新更新
+          </h2>
+          {latest.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">暂无内容</p>
+          ) : (
+            <ul className="flex flex-col divide-y">
+              {latest.map((a) => (
+                <li key={a.id}>
+                  <Link
+                    to={`/article/${a.id}`}
+                    className="flex items-center justify-between gap-3 py-2 transition-colors hover:text-primary"
+                  >
+                    <span className="min-w-0 truncate text-sm font-medium">{a.title}</span>
+                    <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      {a.game_name && <span>{a.game_name}</span>}
+                      <span>{a.updated_at ? new Date(a.updated_at).toLocaleDateString() : ""}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <h2 className="mb-3 flex items-center gap-2 font-semibold">
+            <Eye className="h-4 w-4 text-primary" />
+            本周热词
+          </h2>
+          {hot.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">暂无数据</p>
+          ) : (
+            <ul className="flex flex-col divide-y">
+              {hot.map((a, i) => (
+                <li key={a.id}>
+                  <Link
+                    to={`/article/${a.id}`}
+                    className="flex items-center gap-3 py-2 transition-colors hover:text-primary"
+                  >
+                    <span className="w-5 shrink-0 text-sm font-bold text-muted-foreground">{i + 1}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{a.title}</span>
+                    <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                      <Eye className="h-3 w-3" />
+                      {(a.view_count ?? 0).toLocaleString()}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      {/* A1：热门标签 */}
+      {hotTags.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-3 flex items-center gap-2 font-semibold">
+            <Tag className="h-4 w-4 text-primary" />
+            热门标签
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {hotTags.map(({ tag, count }) => (
+              <Link
+                key={tag}
+                to={`/search?tag=${encodeURIComponent(tag)}`}
+                className="rounded-full bg-secondary px-3 py-1 text-sm text-secondary-foreground transition-colors hover:bg-accent"
+              >
+                {tag}
+                <span className="ml-1 text-xs text-muted-foreground">{count}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 栏目入口 */}
+      <div className="relative mx-auto mb-8 w-full max-w-md">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           value={query}
@@ -45,13 +291,7 @@ export function HomePage() {
         />
       </div>
 
-      {loading ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-36 rounded-xl" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
+      {filtered.length === 0 ? (
         <p className="py-16 text-center text-muted-foreground">
           还没有游戏，等待超管添加。
         </p>

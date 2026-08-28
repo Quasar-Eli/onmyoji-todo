@@ -8,6 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { ArrowLeft, BookOpen, Gauge, Swords, Sparkles, Trophy } from "lucide-react"
+import { useDocumentTitle } from "@/lib/seo"
+
+/** 图片加载失败时的占位（透明 1x1） */
+const BROKEN_IMG = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
 
 const rarityBadge: Record<Shikigami["rarity"], string> = {
   SP: "bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white shadow-md shadow-purple-500/50 ring-1 ring-purple-200/40",
@@ -42,7 +46,13 @@ export function ShikigamiDetailPage() {
   const { slug, id } = useParams<{ slug: string; id: string }>()
   const [game, setGame] = useState<Game | null>(null)
   const [shikigami, setShikigami] = useState<Shikigami | null>(null)
+  const [related, setRelated] = useState<Shikigami[]>([])
   const [loading, setLoading] = useState(true)
+
+  useDocumentTitle(
+    shikigami?.name,
+    shikigami ? `${shikigami.name}（${shikigami.rarity}）式神攻略 - ${game?.name ?? ""}` : undefined
+  )
 
   useEffect(() => {
     if (!id || !slug) return
@@ -52,8 +62,21 @@ export function ShikigamiDetailPage() {
         supabase.from("games").select("*").eq("slug", slug).maybeSingle(),
         supabase.from("shikigami").select("*").eq("id", id).maybeSingle(),
       ])
+      const shikigamiData = (s as Shikigami) ?? null
       setGame((g as Game) ?? null)
-      setShikigami((s as Shikigami) ?? null)
+      setShikigami(shikigamiData)
+
+      // B3：相关式神（同栏目同定位）
+      if (shikigamiData && shikigamiData.type) {
+        const { data: rel } = await supabase
+          .from("shikigami")
+          .select("*")
+          .eq("game_id", shikigamiData.game_id)
+          .eq("type", shikigamiData.type)
+          .neq("id", shikigamiData.id)
+          .limit(4)
+        setRelated((rel as Shikigami[] | null) ?? [])
+      }
       setLoading(false)
     })()
   }, [id, slug])
@@ -95,11 +118,21 @@ export function ShikigamiDetailPage() {
       <Card className={cn("mb-6 border-2 shadow-lg", rarityHeaderBorder[shikigami.rarity])}>
         <CardContent className="flex flex-col gap-6 p-6 sm:flex-row">
           <div className={cn(
-            "h-56 w-44 shrink-0 overflow-hidden rounded-xl shadow-lg bg-gradient-to-br from-muted to-background ring-1 ring-black/5",
+            "h-56 w-44 shrink-0 overflow-hidden rounded-xl shadow-lg bg-linear-to-br from-muted to-background ring-1 ring-black/5",
             !shikigami.image_url && rarityGradient[shikigami.rarity]
           )}>
             {shikigami.image_url ? (
-              <img src={shikigami.image_url} alt={shikigami.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+              <img
+                src={shikigami.image_url}
+                alt={shikigami.name}
+                loading="lazy"
+                onError={(e) => {
+                  const el = e.currentTarget
+                  if (el.src !== BROKEN_IMG) el.src = BROKEN_IMG
+                }}
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
             ) : (
               <div className="flex h-full w-full items-center justify-center">
                 <span className="text-8xl font-bold text-white/95 drop-shadow-2xl">
@@ -120,8 +153,17 @@ export function ShikigamiDetailPage() {
                 </Badge>
               )}
             </div>
+            {/* B3：扩展信息 */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+              {shikigami.attribute && <span>属性：<span className="font-medium text-foreground">{shikigami.attribute}</span></span>}
+              {shikigami.cv && <span>声优：<span className="font-medium text-foreground">{shikigami.cv}</span></span>}
+              {shikigami.version && <span>版本：<span className="font-medium text-foreground">{shikigami.version}</span></span>}
+            </div>
             {shikigami.description && (
               <p className="text-base text-muted-foreground">{shikigami.description}</p>
+            )}
+            {shikigami.biography && (
+              <p className="text-sm leading-relaxed text-muted-foreground">{shikigami.biography}</p>
             )}
           </div>
         </CardContent>
@@ -151,6 +193,41 @@ export function ShikigamiDetailPage() {
           )
         })}
       </div>
+
+      {/* B3：相关式神 */}
+      {related.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-3 font-semibold">同定位推荐</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {related.map((r) => (
+              <Link key={r.id} to={`/game/${game.slug}/shikigami/${r.id}`}>
+                <Card className={cn("group cursor-pointer overflow-hidden border-2 transition-all hover:-translate-y-1", rarityHeaderBorder[r.rarity])}>
+                  <div className={cn("aspect-square overflow-hidden bg-linear-to-br from-muted to-background", !r.image_url && rarityGradient[r.rarity])}>
+                    {r.image_url ? (
+                      <img
+                        src={r.image_url}
+                        alt={r.name}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => (e.currentTarget.style.display = "none")}
+                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-5xl font-bold text-white/90">
+                        {r.name.slice(0, 1)}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2">
+                    <p className="truncate text-sm font-semibold">{r.name}</p>
+                    <p className="text-xs text-muted-foreground">{r.type}</p>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

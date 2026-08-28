@@ -55,6 +55,11 @@ export interface Article {
   created_by: string | null
   created_at: string
   updated_at: string
+  view_count?: number
+  like_count?: number
+  tags?: string[]
+  version?: string | null
+  status?: "draft" | "pending" | "published"
 }
 
 export interface Comment {
@@ -64,9 +69,26 @@ export interface Comment {
   user_id: string
   content: string
   created_at: string
+  like_count?: number
 }
 
 export type Rarity = "SP" | "SSR" | "SR" | "R"
+
+export interface Item {
+  id: string
+  game_id: string
+  name: string
+  type: string | null
+  rarity: string | null
+  image_url: string | null
+  description: string | null
+  detail: string | null
+  source: string | null
+  sort_order: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
 
 export interface Shikigami {
   id: string
@@ -81,6 +103,10 @@ export interface Shikigami {
   panel: string | null
   pve: string | null
   pvp: string | null
+  attribute?: string | null
+  cv?: string | null
+  biography?: string | null
+  version?: string | null
   sort_order: number
   created_by: string | null
   created_at: string

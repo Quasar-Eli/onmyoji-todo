@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { Search } from "lucide-react"
+import { useDocumentTitle } from "@/lib/seo"
 
 const RARITIES: Rarity[] = ["SP", "SSR", "SR", "R"]
 
@@ -52,6 +53,12 @@ export function ShikigamiPage() {
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState("")
   const [activeRarity, setActiveRarity] = useState<Rarity | "all">("all")
+  const [activeType, setActiveType] = useState<string>("all")
+
+  useDocumentTitle(
+    game ? `${game.name} · 式神图鉴` : "式神图鉴",
+    game ? `${game.name} 全部式神图鉴与培养攻略` : undefined
+  )
 
   useEffect(() => {
     if (!slug) return
@@ -77,13 +84,21 @@ export function ShikigamiPage() {
     })()
   }, [slug])
 
+  // B3：定位（type）筛选选项
+  const types = useMemo(() => {
+    const set = new Set<string>()
+    list.forEach((s) => s.type && set.add(s.type))
+    return [...set].sort()
+  }, [list])
+
   const filtered = useMemo(() => {
     return list.filter((s) => {
       const matchRarity = activeRarity === "all" || s.rarity === activeRarity
+      const matchType = activeType === "all" || s.type === activeType
       const matchQuery = s.name.toLowerCase().includes(query.toLowerCase())
-      return matchRarity && matchQuery
+      return matchRarity && matchType && matchQuery
     })
-  }, [list, activeRarity, query])
+  }, [list, activeRarity, activeType, query])
 
   if (loading) {
     return (
@@ -121,8 +136,8 @@ export function ShikigamiPage() {
         </div>
       </div>
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      <div className="mb-6 flex flex-col gap-3">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             value={query}
@@ -150,6 +165,27 @@ export function ShikigamiPage() {
             </Button>
           ))}
         </div>
+        {types.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={activeType === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setActiveType("all")}
+            >
+              全部定位
+            </Button>
+            {types.map((t) => (
+              <Button
+                key={t}
+                variant={activeType === t ? "default" : "outline"}
+                size="sm"
+                onClick={() => setActiveType(t)}
+              >
+                {t}
+              </Button>
+            ))}
+          </div>
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -163,7 +199,7 @@ export function ShikigamiPage() {
                 rarityCard[s.rarity]
               )}>
                 <div className={cn(
-                  "relative aspect-square overflow-hidden bg-gradient-to-br from-muted to-background ring-0 transition-all",
+                  "relative aspect-square overflow-hidden bg-linear-to-br from-muted to-background ring-0 transition-all",
                   rarityRing[s.rarity]
                 )}>
                   {s.image_url ? (
@@ -173,10 +209,11 @@ export function ShikigamiPage() {
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
                       loading="lazy"
                       referrerPolicy="no-referrer"
+                      onError={(e) => (e.currentTarget.style.display = "none")}
                     />
                   ) : (
                     <div className={cn(
-                      "flex h-full w-full items-center justify-center bg-gradient-to-br",
+                      "flex h-full w-full items-center justify-center bg-linear-to-br",
                       rarityGradient[s.rarity]
                     )}>
                       <span className="text-7xl font-bold text-white/95 drop-shadow-2xl">
