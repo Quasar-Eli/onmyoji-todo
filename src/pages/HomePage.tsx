@@ -1,26 +1,10 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { supabase, type Game } from "@/lib/supabase"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useDocumentTitle } from "@/lib/seo"
-import {
-  BookOpen,
-  Eye,
-  Gamepad2,
-  Megaphone,
-  MessageSquare,
-  Search,
-  Swords,
-  Tag,
-  Users,
-} from "lucide-react"
-
-interface StatItem {
-  label: string
-  value: number
-  icon: typeof Users
-}
+import { Eye, Gamepad2, Megaphone, Tag, Users } from "lucide-react"
 
 interface HotArticle {
   id: string
@@ -42,38 +26,22 @@ interface Announcement {
 
 export function HomePage() {
   const [games, setGames] = useState<Game[]>([])
-  const [stats, setStats] = useState<{ games: number; articles: number; shikigami: number; comments: number }>({
-    games: 0,
-    articles: 0,
-    shikigami: 0,
-    comments: 0,
-  })
   const [latest, setLatest] = useState<HotArticle[]>([])
   const [hot, setHot] = useState<HotArticle[]>([])
   const [hotTags, setHotTags] = useState<{ tag: string; count: number }[]>([])
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
-  const [query, setQuery] = useState("")
 
   useDocumentTitle("多游戏 Wiki 中心", "浏览各游戏的攻略、图鉴与词条")
 
   useEffect(() => {
     ;(async () => {
-      const [gRes, aRes, sRes, cRes] = await Promise.all([
+      const [gRes] = await Promise.all([
         supabase.from("games").select("*").order("created_at"),
-        supabase.from("articles").select("*", { count: "exact", head: true }),
-        supabase.from("shikigami").select("*", { count: "exact", head: true }),
-        supabase.from("comments").select("*", { count: "exact", head: true }),
       ])
       setGames((gRes.data as Game[]) ?? [])
-      setStats({
-        games: gRes.data?.length ?? 0,
-        articles: aRes.count ?? 0,
-        shikigami: sRes.count ?? 0,
-        comments: cRes.count ?? 0,
-      })
 
-      // 最新更新 / 热门词条（前 6 条）
+      // 最新更新 / 本周热词（前 6 条）
       const [latRes, hotRes, tagRes, annRes] = await Promise.all([
         supabase.from("articles").select("id, title, game_id, updated_at").order("updated_at", { ascending: false }).limit(6),
         supabase.from("articles").select("id, title, game_id, view_count").gte("created_at", new Date(Date.now() - 7 * 864e5).toISOString()).order("view_count", { ascending: false }).limit(6),
@@ -115,27 +83,10 @@ export function HomePage() {
     })()
   }, [])
 
-  const filtered = useMemo(
-    () => games.filter((g) => g.name.toLowerCase().includes(query.toLowerCase())),
-    [games, query]
-  )
-
-  const statItems: StatItem[] = [
-    { label: "游戏栏目", value: stats.games, icon: Gamepad2 },
-    { label: "攻略词条", value: stats.articles, icon: BookOpen },
-    { label: "式神图鉴", value: stats.shikigami, icon: Swords },
-    { label: "累计评论", value: stats.comments, icon: MessageSquare },
-  ]
-
   if (loading) {
     return (
       <div className="mx-auto w-full max-w-5xl px-4 py-8">
         <Skeleton className="mx-auto mb-6 h-12 w-2/3" />
-        <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-xl" />
-          ))}
-        </div>
         <div className="mb-6 grid gap-4 lg:grid-cols-2">
           <Skeleton className="h-64 rounded-xl" />
           <Skeleton className="h-64 rounded-xl" />
@@ -189,18 +140,7 @@ export function HomePage() {
         </div>
       )}
 
-      {/* A1：数据统计 */}
-      <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {statItems.map(({ label, value, icon: Icon }) => (
-          <Card key={label} className="p-4 text-center">
-            <Icon className="mx-auto mb-1 h-5 w-5 text-primary" />
-            <p className="text-2xl font-bold">{value.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">{label}</p>
-          </Card>
-        ))}
-      </div>
-
-      {/* A1：最新更新 / 热门词条 */}
+      {/* A1：最新更新 / 本周热词 */}
       <div className="mb-8 grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
           <h2 className="mb-3 flex items-center gap-2 font-semibold">
@@ -281,23 +221,13 @@ export function HomePage() {
       )}
 
       {/* 栏目入口 */}
-      <div className="relative mx-auto mb-8 w-full max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索游戏..."
-          className="flex h-10 w-full rounded-full border border-input bg-card pl-10 pr-4 text-sm shadow-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      </div>
-
-      {filtered.length === 0 ? (
+      {games.length === 0 ? (
         <p className="py-16 text-center text-muted-foreground">
           还没有游戏，等待超管添加。
         </p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((game) => (
+          {games.map((game) => (
             <Link key={game.id} to={`/game/${game.slug}`}>
               <Card
                 className="group h-40 cursor-pointer p-5 transition-all hover:-translate-y-1 hover:shadow-lg"

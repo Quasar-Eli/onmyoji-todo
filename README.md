@@ -35,7 +35,7 @@ VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-数据库表结构与 RLS 策略见 `supabase/schema.sql`（含初始超管账号 `admin` / `admin888`，上线前请务必修改）。
+> 数据库表结构与 RLS 策略 SQL 因包含初始超管账号（`admin` / `admin888`，上线前请务必修改）等敏感信息，**不随仓库提交**，仅保存在本地备份中，请通过 Supabase Dashboard 手动维护。
 
 ## 部署到 GitHub Pages
 

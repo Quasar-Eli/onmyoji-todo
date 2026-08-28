@@ -13,9 +13,30 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Settings2, Plus, Trash2, Users, ShieldCheck, ShieldAlert, Swords, BookOpen, MessageSquare, TrendingUp, Megaphone, ScrollText } from "lucide-react"
-import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { useDocumentTitle } from "@/lib/seo"
+import { FEATURE_KEYS, featureLabel } from "@/lib/features"
+import {
+  Settings2,
+  Plus,
+  Trash2,
+  Users,
+  ShieldCheck,
+  ShieldAlert,
+  Swords,
+  BookOpen,
+  MessageSquare,
+  TrendingUp,
+  Megaphone,
+  ScrollText,
+  Pencil,
+} from "lucide-react"
 
 interface GameAdmin {
   game_id: string
@@ -36,15 +57,23 @@ export function AdminPage() {
   // H1：仪表盘统计
   const [stats, setStats] = useState({ articles: 0, shikigami: 0, comments: 0, users: 0 })
   const [daily, setDaily] = useState<{ label: string; count: number }[]>([])
-
-  // 表单
+  // G2：公告入口
+  // 表单（添加 / 编辑游戏）
   const [name, setName] = useState("")
   const [slug, setSlug] = useState("")
   const [description, setDescription] = useState("")
   const [icon, setIcon] = useState("")
   const [accent, setAccent] = useState("#3b82f6")
+  const [features, setFeatures] = useState<string[]>([])
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  // 分配管理员
   const [assignGameId, setAssignGameId] = useState("")
   const [assignUserId, setAssignUserId] = useState("")
+  // 删除确认（受控，含内容量警示）
+  const [deleteTarget, setDeleteTarget] = useState<Game | null>(null)
+  const [deleteDesc, setDeleteDesc] = useState("")
+  const [deleting, setDeleting] = useState(false)
 
   const load = async () => {
     // 近 7 天（含今天）用于条形图
@@ -88,41 +117,92 @@ export function AdminPage() {
   }
 
   useEffect(() => {
-    load()
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const createGame = async () => {
+  // ---------- 游戏表单 ----------
+  const toggleFeature = (key: string) =>
+    setFeatures((f) => (f.includes(key) ? f.filter((k) => k !== key) : [...f, key]))
+
+  const openNew = () => {
+    setEditingId(null)
+    setName("")
+    setSlug("")
+    setDescription("")
+    setIcon("")
+    setAccent("#3b82f6")
+    setFeatures([])
+  }
+
+  const openEdit = (game: Game) => {
+    setEditingId(game.id)
+    setName(game.name)
+    setSlug(game.slug)
+    setDescription(game.description ?? "")
+    setIcon(game.icon ?? "")
+    setAccent(game.accent_color ?? "#3b82f6")
+    setFeatures(game.features ?? [])
+  }
+
+  const saveGame = async () => {
     if (!name.trim() || !slug.trim()) return
-    const { error } = await supabase
-      .from("games")
-      .insert({ name, slug, description, icon: icon || null, accent_color: accent })
-    if (!error) {
-      setName("")
-      setSlug("")
-      setDescription("")
-      setIcon("")
-      load()
+    setSaving(true)
+    const payload = {
+      name: name.trim(),
+      slug: slug.trim(),
+      description: description.trim() || null,
+      icon: icon.trim() || null,
+      accent_color: accent,
+      features,
     }
+    if (editingId) {
+      await supabase.from("games").update(payload).eq("id", editingId)
+    } else {
+      await supabase.from("games").insert(payload)
+    }
+    setSaving(false)
+    openNew()
+    void load()
   }
 
-  const deleteGame = async (id: string) => {
-    await supabase.from("games").delete().eq("id", id)
-    load()
+  const deleteGame = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    await supabase.from("games").delete().eq("id", deleteTarget.id)
+    setDeleting(false)
+    setDeleteTarget(null)
+    void load()
   }
 
+  /** 删除前统计内容量，生成警示文案 */
+  const requestDelete = async (game: Game) => {
+    const [a, s, i] = await Promise.all([
+      supabase.from("articles").select("*", { count: "exact", head: true }).eq("game_id", game.id),
+      supabase.from("shikigami").select("*", { count: "exact", head: true }).eq("game_id", game.id),
+      supabase.from("items").select("*", { count: "exact", head: true }).eq("game_id", game.id),
+    ])
+    const total = (a.count ?? 0) + (s.count ?? 0) + (i.count ?? 0)
+    setDeleteDesc(
+      total > 0
+        ? `该栏目下有 ${a.count ?? 0} 篇文章、${s.count ?? 0} 个式神、${i.count ?? 0} 件装备（共 ${total} 条内容），删除后全部不可恢复！`
+        : "该栏目下暂无内容，删除后不可恢复。"
+    )
+    setDeleteTarget(game)
+  }
+
+  // ---------- 管理员 ----------
   const assignAdmin = async () => {
     if (!assignGameId || !assignUserId) return
-    await supabase
-      .from("game_admins")
-      .upsert({ game_id: assignGameId, user_id: assignUserId })
+    await supabase.from("game_admins").upsert({ game_id: assignGameId, user_id: assignUserId })
     setAssignGameId("")
     setAssignUserId("")
-    load()
+    void load()
   }
 
   const removeAdmin = async (gameId: string, userId: string) => {
     await supabase.from("game_admins").delete().eq("game_id", gameId).eq("user_id", userId)
-    load()
+    void load()
   }
 
   const setGlobalEditor = async (userId: string, enable: boolean) => {
@@ -130,11 +210,10 @@ export function AdminPage() {
       .from("profiles")
       .update({ role: enable ? "global_editor" : "user" })
       .eq("id", userId)
-    load()
+    void load()
   }
 
-  const adminForGame = (gameId: string) =>
-    admins.filter((a) => a.game_id === gameId)
+  const adminForGame = (gameId: string) => admins.filter((a) => a.game_id === gameId)
 
   if (loading) return <p className="py-16 text-center text-muted-foreground">加载中...</p>
 
@@ -219,7 +298,7 @@ export function AdminPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Plus className="h-5 w-5 text-primary" />
-                添加游戏
+                {editingId ? "编辑游戏" : "添加游戏"}
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -251,10 +330,39 @@ export function AdminPage() {
                   <Input value={accent} onChange={(e) => setAccent(e.target.value)} />
                 </div>
               </div>
-              <div className="sm:col-span-2">
-                <Button onClick={createGame} className="w-full">
-                  创建游戏
+              {/* B：功能配置 */}
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <Label>启用功能（留空 = 全部启用）</Label>
+                <div className="flex flex-wrap gap-2">
+                  {FEATURE_KEYS.map((key) => (
+                    <label
+                      key={key}
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors ${
+                        features.includes(key)
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "bg-secondary text-secondary-foreground hover:bg-accent"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={features.includes(key)}
+                        onChange={() => toggleFeature(key)}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      {featureLabel(key)}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-2 sm:col-span-2">
+                <Button onClick={() => void saveGame()} disabled={saving || !name.trim() || !slug.trim()} className="flex-1">
+                  {saving ? "保存中..." : editingId ? "保存修改" : "创建游戏"}
                 </Button>
+                {editingId && (
+                  <Button variant="outline" onClick={openNew}>
+                    取消编辑
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -341,6 +449,13 @@ export function AdminPage() {
                   <h3 className="font-semibold">{game.name}</h3>
                   <p className="text-xs text-muted-foreground">{game.description || "暂无描述"}</p>
                   <div className="mt-1 flex flex-wrap gap-1.5">
+                    {(game.features ?? []).length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        功能：{(game.features ?? []).map(featureLabel).join(" / ")}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
                     {adminForGame(game.id).map((a) => (
                       <span
                         key={a.user_id}
@@ -364,6 +479,12 @@ export function AdminPage() {
                 </div>
               </div>
               <div className="flex shrink-0 gap-2">
+                {isSuper && (
+                  <Button size="sm" variant="outline" onClick={() => openEdit(game)}>
+                    <Pencil className="h-4 w-4" />
+                    编辑
+                  </Button>
+                )}
                 <Button asChild size="sm" variant="outline">
                   <Link to={`/admin/game/${game.id}`}>
                     <Settings2 className="h-4 w-4" />
@@ -383,21 +504,31 @@ export function AdminPage() {
                   </Link>
                 </Button>
                 {isSuper && (
-                  <ConfirmDialog
-                    title={`删除栏目"${game.name}"？`}
-                    description="会同时删除其下所有分类、模块与内容，且不可恢复。"
-                    onConfirm={() => deleteGame(game.id)}
-                  >
-                    <Button size="sm" variant="destructive">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </ConfirmDialog>
+                  <Button size="sm" variant="destructive" onClick={() => void requestDelete(game)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 )}
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {/* 删除确认（受控，带内容量警示） */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>删除栏目「{deleteTarget?.name}」？</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{deleteDesc}</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>取消</Button>
+            <Button variant="destructive" onClick={() => void deleteGame()} disabled={deleting}>
+              {deleting ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -10,6 +10,8 @@ import { validateComment } from "@/lib/sensitive"
 import { cn } from "@/lib/utils"
 import { MessageSquare, Send, ThumbsUp, Trash2, Reply } from "lucide-react"
 
+export type CommentTargetType = "article" | "shikigami" | "item"
+
 interface CommentWithUser extends Comment {
   username?: string
   avatar_url?: string | null
@@ -17,8 +19,8 @@ interface CommentWithUser extends Comment {
 }
 
 interface CommentsProps {
-  articleId: string
-  gameId: string
+  targetType: CommentTargetType
+  targetId: string
   canModerate: boolean
 }
 
@@ -26,7 +28,8 @@ type SortMode = "new" | "hot"
 
 const PAGE_SIZE = 20
 
-export function Comments({ articleId, canModerate }: CommentsProps) {
+/** 通用实体评论：article / shikigami / item 多态复用 */
+export function Comments({ targetType, targetId, canModerate }: CommentsProps) {
   const { user, profile } = useAuth()
   const [comments, setComments] = useState<CommentWithUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,7 +45,8 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
     const { data, error } = await supabase
       .from("comments")
       .select("*")
-      .eq("article_id", articleId)
+      .eq("target_type", targetType)
+      .eq("target_id", targetId)
       .order("created_at", { ascending: true })
     if (error || !data) {
       setLoading(false)
@@ -102,11 +106,12 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
   useEffect(() => {
     setLoading(true)
     setVisible(PAGE_SIZE)
+    setReplyTarget(null)
     ;(async () => {
       await load()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [articleId])
+  }, [targetType, targetId])
 
   // 加载完评论后再拉点赞状态
   useEffect(() => {
@@ -124,7 +129,8 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
     }
     setError(null)
     const { error } = await supabase.from("comments").insert({
-      article_id: articleId,
+      target_type: targetType,
+      target_id: targetId,
       user_id: user.id,
       content: newContent.trim(),
     })
@@ -143,7 +149,8 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
     }
     setError(null)
     const { error } = await supabase.from("comments").insert({
-      article_id: articleId,
+      target_type: targetType,
+      target_id: targetId,
       parent_id: replyTarget.id,
       user_id: user.id,
       content: replyContent.trim(),
@@ -203,7 +210,7 @@ export function Comments({ articleId, canModerate }: CommentsProps) {
                   {new Date(comment.created_at).toLocaleString()}
                 </span>
               </div>
-              <p className="mt-1 wrap-break-word text-sm">{comment.content}</p>
+              <p className="mt-1 break-words text-sm">{comment.content}</p>
               <div className="mt-2 flex items-center gap-2">
                 {user && (
                   <>

@@ -27,6 +27,7 @@ export interface Game {
   icon: string | null
   accent_color: string | null
   editor_id: string | null
+  features?: string[] | null
   created_at: string
 }
 
@@ -64,7 +65,9 @@ export interface Article {
 
 export interface Comment {
   id: string
-  article_id: string
+  article_id: string | null
+  target_type?: string
+  target_id?: string | null
   parent_id: string | null
   user_id: string
   content: string

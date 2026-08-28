@@ -12,13 +12,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
-import { Gamepad2, LayoutDashboard, LogOut, Moon, Search, Settings, Sun, User, Wrench } from "lucide-react"
+import { Gamepad2, LayoutDashboard, LogOut, Moon, Search, Settings, Sun, User } from "lucide-react"
 import { useTheme } from "@/lib/theme"
 
 interface Notification {
   id: string
   type: "comment" | "reply" | "article_like" | "comment_like"
-  target_type: "article" | "comment"
+  target_type: "article" | "comment" | "shikigami" | "item"
   target_id: string
   read_at: string | null
   created_at: string
@@ -63,6 +63,23 @@ export function Navbar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
+  /** 解析实体通知的目标地址（article / shikigami / item） */
+  const resolveEntityHref = async (type: string, id: string): Promise<string> => {
+    if (type === "article") return `/article/${id}`
+    const table = type === "shikigami" ? "shikigami" : "items"
+    const { data } = await supabase.from(table).select("game_id").eq("id", id).maybeSingle()
+    if (!data) return "/"
+    const { data: game } = await supabase
+      .from("games")
+      .select("slug")
+      .eq("id", (data as { game_id: string }).game_id)
+      .maybeSingle()
+    if (!game) return "/"
+    return type === "shikigami"
+      ? `/game/${(game as { slug: string }).slug}/shikigami/${id}`
+      : `/game/${(game as { slug: string }).slug}/items/${id}`
+  }
+
   /** C3：点击通知 → 全部标记已读 + 跳转目标 */
   const openNotification = async (n: Notification) => {
     await supabase.rpc("mark_notifications_read")
@@ -71,13 +88,19 @@ export function Navbar() {
     let href = "/"
     if (n.target_type === "article") {
       href = `/article/${n.target_id}`
-    } else {
+    } else if (n.target_type === "comment") {
+      // 评论通知：解析评论所属实体再跳转
       const { data } = await supabase
         .from("comments")
-        .select("article_id")
+        .select("target_type, target_id")
         .eq("id", n.target_id)
         .maybeSingle()
-      if (data) href = `/article/${(data as { article_id: string }).article_id}`
+      if (data) {
+        const c = data as { target_type: string; target_id: string }
+        href = await resolveEntityHref(c.target_type, c.target_id)
+      }
+    } else {
+      href = await resolveEntityHref(n.target_type, n.target_id)
     }
     void loadNotifs()
     navigate(href)
@@ -98,12 +121,6 @@ export function Navbar() {
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild title="全站搜索">
             <Link to="/search">
               <Search className="h-4 w-4" />
-            </Link>
-          </Button>
-          {/* 工具中心入口 */}
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" asChild title="工具中心">
-            <Link to="/tools">
-              <Wrench className="h-4 w-4" />
             </Link>
           </Button>
           {/* F1：暗黑模式切换 */}

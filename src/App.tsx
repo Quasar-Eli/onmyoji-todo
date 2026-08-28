@@ -43,7 +43,7 @@ export default function App() {
               <Route path="/game/:slug/topics" element={<TopicsPage />} />
               <Route path="/game/:slug/topics/:id" element={<TopicsDetailPage />} />
               <Route path="/game/:slug/submit" element={<SubmitArticlePage />} />
-              <Route path="/tools" element={<ToolsPage />} />
+              <Route path="/game/:slug/tools" element={<ToolsPage />} />
               <Route path="/article/:id" element={<ArticlePage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/login" element={<LoginPage />} />

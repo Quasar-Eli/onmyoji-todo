@@ -1,9 +1,11 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { Link, useParams } from "react-router-dom"
+import { supabase, type Game } from "@/lib/supabase"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useDocumentTitle } from "@/lib/seo"
-import { Gauge, TrendingUp } from "lucide-react"
+import { ArrowLeft, Gauge, TrendingUp } from "lucide-react"
 
 const num = (v: string) => {
   const n = parseFloat(v)
@@ -110,9 +112,7 @@ function SpeedCalculator() {
           {[0.7, 0.75, 0.8].map((r) => (
             <button
               key={r}
-              onClick={() => {
-                setPull(String(r * 100))
-              }}
+              onClick={() => setPull(String(r * 100))}
               className="rounded-full bg-secondary px-3 py-1 text-xs hover:bg-accent"
             >
               {r * 100}% 模板（二速 {Math.ceil(s1 * (1 - r))}）
@@ -124,11 +124,32 @@ function SpeedCalculator() {
   )
 }
 
+/** 工具中心：作为栏目内功能（/game/:slug/tools） */
 export function ToolsPage() {
-  useDocumentTitle("工具中心", "伤害计算器与速度阈值计算")
+  const { slug } = useParams<{ slug: string }>()
+  const [game, setGame] = useState<Game | null>(null)
+
+  useDocumentTitle(game ? `${game.name} · 工具` : "工具中心", "伤害计算器与速度阈值计算")
+
+  useEffect(() => {
+    if (!slug) return
+    ;(async () => {
+      const { data } = await supabase.from("games").select("*").eq("slug", slug).maybeSingle()
+      setGame((data as Game) ?? null)
+    })()
+  }, [slug])
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8">
+      {game && (
+        <Link
+          to={`/game/${game.slug}`}
+          className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          返回 {game.name}
+        </Link>
+      )}
       <h1 className="mb-2 text-3xl font-bold">工具中心</h1>
       <p className="mb-6 text-muted-foreground">常用战斗数值计算小工具，纯本地计算，不涉及账号数据</p>
       <div className="flex flex-col gap-6">

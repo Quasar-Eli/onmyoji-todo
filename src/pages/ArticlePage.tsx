@@ -301,8 +301,8 @@ export function ArticlePage() {
         )}
 
         <Comments
-          articleId={article.id}
-          gameId={article.game_id}
+          targetType="article"
+          targetId={article.id}
           canModerate={profile?.role === "super_admin" || profile?.role === "global_editor"}
         />
       </div>

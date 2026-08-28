@@ -6,8 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useDocumentTitle } from "@/lib/seo"
-import { BookOpen, FileText, Search, Swords } from "lucide-react"
+import { BookOpen, FileText, Gamepad2, Search, Swords } from "lucide-react"
 
+interface GameHit {
+  id: string
+  name: string
+  slug: string
+  icon?: string | null
+  description?: string | null
+}
 interface ArticleHit {
   id: string
   title: string
@@ -34,12 +41,13 @@ interface ModuleHit {
 }
 
 interface SearchState {
+  games: GameHit[]
   articles: ArticleHit[]
   shikigami: ShikigamiHit[]
   modules: ModuleHit[]
 }
 
-const emptyState: SearchState = { articles: [], shikigami: [], modules: [] }
+const emptyState: SearchState = { games: [], articles: [], shikigami: [], modules: [] }
 
 /** 关键词高亮（仅高亮首处命中，足够预览） */
 const highlight = (text: string, keyword: string) => {
@@ -67,7 +75,7 @@ export function SearchPage() {
 
   useDocumentTitle(
     tag ? `标签：${tag}` : initialQ ? `搜索：${initialQ}` : "搜索",
-    "跨栏目搜索攻略、式神与模块"
+    "跨栏目搜索游戏、攻略、式神与模块"
   )
 
   const gameMap = useMemo(() => new Map<string, Game>(), [])
@@ -84,7 +92,7 @@ export function SearchPage() {
       setSearched(true)
       try {
         const [gRes, aRes, sRes, mRes] = await Promise.all([
-          supabase.from("games").select("id, name, slug"),
+          supabase.from("games").select("id, name, slug, icon, description").ilike("name", `%${k}%`).limit(10),
           supabase.from("articles")
             .select("id, title, game_id, updated_at")
             .or(`title.ilike.%${k}%,content.ilike.%${k}%`)
@@ -102,6 +110,11 @@ export function SearchPage() {
         const gname = (id: string) => gameMap.get(id)?.name
         const gslug = (id: string) => gameMap.get(id)?.slug
         setState({
+          games: ((gRes.data ?? []) as GameHit[]).map((r) => ({
+            ...r,
+            icon: (r.icon as string | null) ?? null,
+            description: (r.description as string | null) ?? null,
+          })),
           articles: ((aRes.data ?? []) as { id: string; title: string; game_id: string; updated_at: string }[]).map((r) => ({
             ...r,
             game_name: gname(r.game_id),
@@ -140,6 +153,7 @@ export function SearchPage() {
       ])
       ;(gRes.data as Game[] | null)?.forEach((g) => gameMap.set(g.id, g))
       setState({
+        games: [],
         articles: ((aRes.data ?? []) as { id: string; title: string; game_id: string; updated_at: string }[]).map((r) => ({
           ...r,
           game_name: gameMap.get(r.game_id)?.name,
@@ -163,7 +177,7 @@ export function SearchPage() {
     window.location.hash = `#/search?q=${encodeURIComponent(input.trim())}`
   }
 
-  const total = state.articles.length + state.shikigami.length + state.modules.length
+  const total = state.games.length + state.articles.length + state.shikigami.length + state.modules.length
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-8">
@@ -176,7 +190,7 @@ export function SearchPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && submit()}
-            placeholder="搜索攻略、式神、模块..."
+            placeholder="搜索游戏、攻略、式神、模块..."
             className="pl-10"
           />
         </div>
@@ -205,6 +219,33 @@ export function SearchPage() {
 
       {!loading && searched && total > 0 && (
         <div className="flex flex-col gap-6">
+          {/* 游戏栏目 */}
+          {state.games.length > 0 && (
+            <section>
+              <h2 className="mb-2 flex items-center gap-2 font-semibold">
+                <Gamepad2 className="h-4 w-4 text-primary" />
+                游戏栏目（{state.games.length}）
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {state.games.map((g) => (
+                  <Link key={g.id} to={`/game/${g.slug}`}>
+                    <Card className="w-64 transition-colors hover:bg-accent/50">
+                      <CardContent className="flex items-center gap-3 p-3">
+                        <span className="text-2xl">{g.icon ?? "🎮"}</span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{highlight(g.name, tag || input)}</p>
+                          {g.description && (
+                            <p className="truncate text-xs text-muted-foreground">{g.description}</p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
           {state.articles.length > 0 && (
             <section>
               <h2 className="mb-2 flex items-center gap-2 font-semibold">

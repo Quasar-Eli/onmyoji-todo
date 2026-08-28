@@ -20,6 +20,8 @@ dist-ssr
 # 文档目录
 docs/
 
+supabase
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

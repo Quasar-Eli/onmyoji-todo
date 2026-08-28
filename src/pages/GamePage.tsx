@@ -8,6 +8,7 @@ import { FolderOpen, LayoutGrid, Plus, Search } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 import { cn } from "@/lib/utils"
 import { useDocumentTitle } from "@/lib/seo"
+import { FEATURES, enabledFeatures } from "@/lib/features"
 
 export function GamePage() {
   const { slug } = useParams<{ slug: string }>()
@@ -111,74 +112,41 @@ export function GamePage() {
         )}
       </div>
 
-      <Link to={`/game/${game.slug}/shikigami`}>
-          <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
-            <CardContent className="flex items-center gap-4 p-4">
-              <span className="text-3xl">⚔️</span>
-              <div className="flex-1">
-                <h2 className="font-semibold">式神图鉴</h2>
-                <p className="text-sm text-muted-foreground">
-                  {shikigamiCount > 0
-                    ? `共 ${shikigamiCount} 位式神 · 点击查阅培养、御魂、面板与就业攻略`
-                    : "收录式神攻略，点击进入"}
-                </p>
-              </div>
-              <span className="text-primary">进入 →</span>
-            </CardContent>
-          </Card>
-        </Link>
-
-      <Link to={`/game/${game.slug}/items`}>
-        <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
-          <CardContent className="flex items-center gap-4 p-4">
-            <span className="text-3xl">🛡️</span>
-            <div className="flex-1">
-              <h2 className="font-semibold">装备图鉴</h2>
-              <p className="text-sm text-muted-foreground">收录装备、御魂与道具数据，点击进入</p>
-            </div>
-            <span className="text-primary">进入 →</span>
-          </CardContent>
-        </Card>
-      </Link>
-
-      <Link to={`/game/${game.slug}/gacha`}>
-        <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
-          <CardContent className="flex items-center gap-4 p-4">
-            <span className="text-3xl">🎴</span>
-            <div className="flex-1">
-              <h2 className="font-semibold">抽卡模拟器</h2>
-              <p className="text-sm text-muted-foreground">单抽/十连模拟，统计你的欧气</p>
-            </div>
-            <span className="text-primary">进入 →</span>
-          </CardContent>
-        </Card>
-      </Link>
-
-      <Link to={`/game/${game.slug}/topics`}>
-        <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
-          <CardContent className="flex items-center gap-4 p-4">
-            <span className="text-3xl">💬</span>
-            <div className="flex-1">
-              <h2 className="font-semibold">问答</h2>
-              <p className="text-sm text-muted-foreground">向玩家提问，或解答大家的疑惑</p>
-            </div>
-            <span className="text-primary">进入 →</span>
-          </CardContent>
-        </Card>
-      </Link>
-
-      <Link to={`/game/${game.slug}/submit`}>
-        <Card className="mb-6 cursor-pointer border-primary/30 transition-colors hover:bg-accent/50">
-          <CardContent className="flex items-center gap-4 p-4">
-            <span className="text-3xl">📝</span>
-            <div className="flex-1">
-              <h2 className="font-semibold">投稿</h2>
-              <p className="text-sm text-muted-foreground">贡献你的攻略，审核通过后发布</p>
-            </div>
-            <span className="text-primary">进入 →</span>
-          </CardContent>
-        </Card>
-      </Link>
+      {/* 功能入口 */}
+      <div className="mb-6">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <LayoutGrid className="h-4 w-4 text-primary" />
+          功能入口
+        </h2>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+          {enabledFeatures(game.features).map((key) => {
+            const meta = FEATURES[key]
+            const desc =
+              key === "shikigami"
+                ? shikigamiCount > 0
+                  ? `共 ${shikigamiCount} 位`
+                  : "培养 / 御魂 / 面板"
+                : key === "items"
+                  ? "装备 / 御魂 / 道具"
+                  : key === "gacha"
+                    ? "测测你的欧气"
+                    : key === "topics"
+                      ? "提问与解答"
+                      : key === "submit"
+                        ? "审核后发布"
+                        : "伤害 / 配速计算"
+            return (
+              <Link key={key} to={meta.to(game.slug)}>
+                <Card className="group h-full cursor-pointer p-4 text-center transition-all hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10">
+                  <span className="text-3xl">{meta.icon}</span>
+                  <p className="mt-2 font-semibold">{meta.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">{desc}</p>
+                </Card>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">

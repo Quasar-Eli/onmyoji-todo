@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { ArrowLeft, BookOpen, Gauge, Swords, Sparkles, Trophy } from "lucide-react"
 import { useDocumentTitle } from "@/lib/seo"
+import { Comments } from "@/components/Comments"
+import { useAuth } from "@/context/AuthContext"
 
 /** 图片加载失败时的占位（透明 1x1） */
 const BROKEN_IMG = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
@@ -44,6 +46,7 @@ const sections = [
 
 export function ShikigamiDetailPage() {
   const { slug, id } = useParams<{ slug: string; id: string }>()
+  const { profile } = useAuth()
   const [game, setGame] = useState<Game | null>(null)
   const [shikigami, setShikigami] = useState<Shikigami | null>(null)
   const [related, setRelated] = useState<Shikigami[]>([])
@@ -118,7 +121,7 @@ export function ShikigamiDetailPage() {
       <Card className={cn("mb-6 border-2 shadow-lg", rarityHeaderBorder[shikigami.rarity])}>
         <CardContent className="flex flex-col gap-6 p-6 sm:flex-row">
           <div className={cn(
-            "h-56 w-44 shrink-0 overflow-hidden rounded-xl shadow-lg bg-linear-to-br from-muted to-background ring-1 ring-black/5",
+            "h-56 w-44 shrink-0 overflow-hidden rounded-xl shadow-lg bg-gradient-to-br from-muted to-background ring-1 ring-black/5",
             !shikigami.image_url && rarityGradient[shikigami.rarity]
           )}>
             {shikigami.image_url ? (
@@ -202,7 +205,7 @@ export function ShikigamiDetailPage() {
             {related.map((r) => (
               <Link key={r.id} to={`/game/${game.slug}/shikigami/${r.id}`}>
                 <Card className={cn("group cursor-pointer overflow-hidden border-2 transition-all hover:-translate-y-1", rarityHeaderBorder[r.rarity])}>
-                  <div className={cn("aspect-square overflow-hidden bg-linear-to-br from-muted to-background", !r.image_url && rarityGradient[r.rarity])}>
+                  <div className={cn("aspect-square overflow-hidden bg-gradient-to-br from-muted to-background", !r.image_url && rarityGradient[r.rarity])}>
                     {r.image_url ? (
                       <img
                         src={r.image_url}
@@ -228,6 +231,13 @@ export function ShikigamiDetailPage() {
           </div>
         </div>
       )}
+
+      {/* 实体化评论 */}
+      <Comments
+        targetType="shikigami"
+        targetId={shikigami.id}
+        canModerate={profile?.role === "super_admin" || profile?.role === "global_editor"}
+      />
     </div>
   )
 }
