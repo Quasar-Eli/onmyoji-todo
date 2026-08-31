@@ -115,3 +115,21 @@ export interface Shikigami {
   created_at: string
   updated_at: string
 }
+
+/** 上传图片到 images bucket，返回公开 URL（供 Markdown 编辑器粘贴/选择图片使用） */
+export async function uploadImage(file: File): Promise<string> {
+  const MAX_SIZE = 5 * 1024 * 1024 // 5MB
+  const ALLOWED = ["image/png", "image/jpeg", "image/gif", "image/webp"]
+  if (file.size > MAX_SIZE) throw new Error("图片不能超过 5MB")
+  if (!ALLOWED.includes(file.type)) throw new Error("仅支持 png / jpg / gif / webp 图片")
+
+  const now = new Date()
+  const path = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${crypto.randomUUID()}-${file.name}`
+  const { error } = await supabase.storage
+    .from("images")
+    .upload(path, file, { upsert: false, cacheControl: "3600" })
+  if (error) throw new Error(error.message)
+
+  const { data } = supabase.storage.from("images").getPublicUrl(path)
+  return data.publicUrl
+}

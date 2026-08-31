@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { uploadImage } from "@/lib/supabase"
 
 interface MarkdownEditorProps {
   value: string
@@ -21,7 +22,40 @@ interface Action {
 /** F4：简易 Markdown 编辑器（工具栏 + 分栏预览） */
 export function MarkdownEditor({ value, onChange, rows = 12, placeholder }: MarkdownEditorProps) {
   const [mode, setMode] = useState<"write" | "preview">("write")
+  const [uploading, setUploading] = useState(false)
   const taRef = useRef<HTMLTextAreaElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  /** 上传图片并插入 Markdown 语法 */
+  const insertImage = async (file: File) => {
+    const ta = taRef.current
+    if (!ta || uploading) return
+    setUploading(true)
+    try {
+      const url = await uploadImage(file)
+      const syntax = `\n![](${url})\n`
+      const { selectionStart: start, selectionEnd: end } = ta
+      const next = value.slice(0, start) + syntax + value.slice(end)
+      onChange(next)
+      requestAnimationFrame(() => {
+        ta.focus()
+        ta.setSelectionRange(start + syntax.length, start + syntax.length)
+      })
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "图片上传失败")
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  /** 粘贴图片时自动上传 */
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData?.items ?? [])
+    const file = items.find((it) => it.type.startsWith("image/"))?.getAsFile()
+    if (!file) return
+    e.preventDefault()
+    void insertImage(file)
+  }
 
   /** 在光标处插入语法，并选中占位文本 */
   const insert = (before: string, after = "", placeholderText = "文本") => {
@@ -62,6 +96,26 @@ export function MarkdownEditor({ value, onChange, rows = 12, placeholder }: Mark
             {a.label}
           </button>
         ))}
+        <button
+          type="button"
+          title={uploading ? "上传中…" : "插入图片（支持粘贴）"}
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="rounded px-1.5 py-0.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+        >
+          {uploading ? "上传中…" : "🖼"}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) void insertImage(f)
+            e.target.value = ""
+          }}
+        />
         <div className="ml-auto flex gap-1">
           <Button
             type="button"
@@ -88,6 +142,7 @@ export function MarkdownEditor({ value, onChange, rows = 12, placeholder }: Mark
           ref={taRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onPaste={handlePaste}
           rows={rows}
           placeholder={placeholder}
           className="border-0 shadow-none focus-visible:ring-0"
